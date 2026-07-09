@@ -6,6 +6,7 @@ Downloads and prepares the LOL dataset from Hugging Face
 import os
 import zipfile
 import shutil
+import subprocess
 import requests
 from tqdm import tqdm
 from PIL import Image
@@ -75,16 +76,22 @@ def download_lol_dataset(target_dir='LOLdataset'):
     print("📥 Downloading LOL Dataset from Hugging Face")
     print("="*60)
     
-    # Clean up old files
+    # Clean up old files using Python
     print("[1/5] Cleaning old files...")
-    !rm -rf {target_dir} LOLdataset_extracted lol_dataset.zip
+    if os.path.exists(target_dir):
+        shutil.rmtree(target_dir)
+    if os.path.exists('LOLdataset_extracted'):
+        shutil.rmtree('LOLdataset_extracted')
+    if os.path.exists('lol_dataset.zip'):
+        os.remove('lol_dataset.zip')
     
-    # Download
+    # Download using requests
     print("[2/5] Downloading dataset (331 MB)...")
     url = "https://huggingface.co/datasets/geekyrakshit/LoL-Dataset/resolve/main/lol_dataset.zip"
     
     try:
         response = requests.get(url, stream=True)
+        response.raise_for_status()
         total_size = int(response.headers.get('content-length', 0))
         
         with open('lol_dataset.zip', 'wb') as f:
@@ -97,7 +104,15 @@ def download_lol_dataset(target_dir='LOLdataset'):
     except Exception as e:
         print(f"⚠️ Download failed: {e}")
         print("Trying alternative method with wget...")
-        !wget -q --show-progress https://huggingface.co/datasets/geekyrakshit/LoL-Dataset/resolve/main/lol_dataset.zip -O lol_dataset.zip
+        # Use subprocess to run wget
+        result = subprocess.run(
+            ['wget', '-q', '--show-progress', url, '-O', 'lol_dataset.zip'],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode != 0:
+            raise RuntimeError("Failed to download dataset with both requests and wget.")
+        print("✅ Download complete with wget!")
     
     # Extract
     print("[3/5] Extracting dataset...")
@@ -148,11 +163,14 @@ def download_lol_dataset(target_dir='LOLdataset'):
     
     # Clean up
     print("[5/5] Cleaning up temporary files...")
-    !rm -rf LOLdataset_extracted lol_dataset.zip
+    if os.path.exists('LOLdataset_extracted'):
+        shutil.rmtree('LOLdataset_extracted')
+    if os.path.exists('lol_dataset.zip'):
+        os.remove('lol_dataset.zip')
     
     # Verify
-    train_count = len(os.listdir(f'{target_dir}/our485/low'))
-    test_count = len(os.listdir(f'{target_dir}/eval15/low'))
+    train_count = len(os.listdir(f'{target_dir}/our485/low')) if os.path.exists(f'{target_dir}/our485/low') else 0
+    test_count = len(os.listdir(f'{target_dir}/eval15/low')) if os.path.exists(f'{target_dir}/eval15/low') else 0
     
     print("\n" + "-"*40)
     print("🔎 Final Verification:")
