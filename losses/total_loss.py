@@ -9,10 +9,12 @@ class TotalLoss(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.physics = PhysicsLosses()
-        self.perceptual = VGGPerceptualLoss()
+        # ✅ Pass device to VGG loss
+        self.perceptual = VGGPerceptualLoss(device=config.DEVICE)
         self.config = config
         
     def forward(self, v, outputs):
+        # ... (بقیه کد保持不变) ...
         R, L = outputs['R'], outputs['L']
         t, A = outputs['t'], outputs['A']
         J_ret = outputs['J_ret']
@@ -34,7 +36,7 @@ class TotalLoss(nn.Module):
         # Physical Prior
         loss_prior = self.config.LAMBDA_PRIOR * self.physics.physical_prior(t, A, L)
         
-        # VGG Perceptual
+        # VGG Perceptual (✅ now works with correct device)
         loss_vgg = self.config.LAMBDA_VGG * self.perceptual(J_ret, v)
         
         # Total
