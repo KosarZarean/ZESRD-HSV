@@ -4,8 +4,7 @@ import kornia
 
 from .retinex import RetinexNet
 from .scattering import ScatteringNet
-from physics import KoschmiederModel
-
+from .koschmieder import KoschmiederModel
 
 class ZESRD_HSV(nn.Module):
 
