@@ -51,7 +51,12 @@ class ZESRD_HSV(nn.Module):
 
         # ---------- Gamma ----------
 
-        G_restore = self.adaptive_gamma(G_restore)
+        gamma = self.gamma_net(G_restore)
+
+        G_restore = torch.pow(
+            G_restore + 1e-6,
+            gamma
+        )
 
         # ---------- Reconstruct ----------
 
