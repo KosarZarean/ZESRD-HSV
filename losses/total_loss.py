@@ -1,42 +1,53 @@
-# ============================================================
-# Cell: Emergency Run - Without VGG Loss
-# ============================================================
+class TotalLoss(nn.Module):
 
-import sys
-import torch
-import gc
+    def __init__(self):
 
-# Clear cache
-torch.cuda.empty_cache()
-gc.collect()
+        super().__init__()
 
-# Force reload
-sys.path.append('/content/ZESRD-HSV')
-for module in ['losses.perceptual', 'losses.total_loss', 'train', 'evaluate']:
-    if module in sys.modules:
-        del sys.modules[module]
+        self.vgg = VGGPerceptualLoss()
 
-from config import Config
+        self.edge = EdgeLoss()
 
-# ✅ Disable VGG loss
-Config.LAMBDA_VGG = 0.0
-print("⚠️ VGG Perceptual Loss DISABLED (LAMBDA_VGG = 0.0)")
+    def forward(
 
-from evaluate import evaluate_zesrd
+        self,
 
-print("="*70)
-print("🚀 ZESRD-HSV Evaluation (Emergency - No VGG)")
-print("="*70)
-print(f"Images: 15 | Device: {Config.DEVICE}")
-print("-"*70)
+        I,
 
-# Run evaluation
-psnrs, ssims = evaluate_zesrd()
+        enhanced,
 
-# Display results
-print("\n" + "="*50)
-print("📊 FINAL RESULTS")
-print("="*50)
-print(f"✅ Mean PSNR: {sum(psnrs)/len(psnrs):.2f} dB")
-print(f"✅ Mean SSIM: {sum(ssims)/len(ssims):.4f}")
-print("="*50)
+        R,
+
+        G,
+
+        R1,
+
+        G1
+
+    ):
+
+        Lrec = physics_loss(I,R,G)
+
+        Ltv = smoothness_loss(G,R)
+
+        Lcons = consistency_loss(R,R1,G,G1)
+
+        Lvgg = self.vgg(enhanced,I)
+
+        Ledge = self.edge(enhanced,I)
+
+        total = (
+
+            6.0*Lrec+
+
+            1.0*Ltv+
+
+            1.5*Lcons+
+
+            0.2*Lvgg+
+
+            0.3*Ledge
+
+        )
+
+        return total
