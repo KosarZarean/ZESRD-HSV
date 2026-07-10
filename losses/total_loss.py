@@ -5,7 +5,7 @@ import torch.nn as nn
 from .perceptual import VGGPerceptualLoss
 from .edge import EdgeLoss
 from .physics import physics_loss
-from .Smoothness import smoothness_loss 
+from .smoothness import smoothness_loss 
 from .consistency import consistency_loss
 
 class TotalLoss(nn.Module):
