@@ -1,215 +1,49 @@
 import torch
 import torch.optim as optim
-
-from torch.cuda.amp import autocast, GradScaler
-
+from torch.utils.data import DataLoader
 from models.zesrd_hsv import ZESRD_HSV
 from losses.total_loss import TotalLoss
-from utils.ema import EMA
+from utils.ema import EMA # فرض بر وجود کلاس EMA در utils
+import config
 
-
-def train_zero_shot(v_tensor, config=None):
-
-    if config is None:
-        config = Config
-
-
-    model = ZESRD_HSV(
-        base_channels=config.BASE_CHANNELS,
-        K=config.K_CURVE
-    ).to(config.DEVICE)
-
-
-
-    optimizer = optim.AdamW(
-        model.parameters(),
-        lr=3e-4,
-        betas=(0.9,0.999),
-        weight_decay=1e-4
-    )
-
-
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(
-        optimizer,
-        T_max=300,
-        eta_min=1e-6
-    )
-
-
-    criterion = TotalLoss(config)
-
-
-    scaler = GradScaler()
-
-
-    ema = EMA(
-        model,
-        decay=0.999
-    )
-
-
-    best_loss=float("inf")
-
-    best_state=None
-
-    patience=40
-
-    counter=0
-
-
-
-    history={
-
-        "loss":[],
-        "gamma":[]
-
-    }
-
-
-
+def train_one_image(image_path):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    # 1. بارگذاری مدل و انتقال به GPU
+    model = ZESRD_HSV().to(device)
     model.train()
+    
+    # 2. تنظیمات Loss و Optimizer
+    criterion = TotalLoss(config=config).to(device)
+    optimizer = optim.AdamW(model.parameters(), lr=1e-4)
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
+    
+    # 3. راه اندازی EMA
+    ema = EMA(model, decay=0.999)
+    ema.register()
 
+    # فرض: تصویر خوانده شده و به [1, 3, H, W] تبدیل شده است
+    image = load_image(image_path).to(device) 
 
-
-    for i in range(300):
-
-
-        optimizer.zero_grad(
-            set_to_none=True
-        )
-
-
-        with autocast():
-
-
-            outputs=model(v_tensor)
-
-
-            loss,loss_dict=criterion(
-                v_tensor,
-                outputs
-            )
-
-
-
-        scaler.scale(loss).backward()
-
-
-
-        scaler.unscale_(
-            optimizer
-        )
-
-
-        torch.nn.utils.clip_grad_norm_(
-            model.parameters(),
-            5.0
-        )
-
-
-
-        scaler.step(
-            optimizer
-        )
-
-
-        scaler.update()
-
-
-
+    # 4. حلقه آموزش (Zero-shot)
+    for epoch in range(200):
+        optimizer.zero_grad()
+        
+        # قرارداد: ورودی [B,3,H,W] و دریافت خروجی به صورت دیکشنری
+        outputs = model(image)
+        
+        # قرارداد: استفاده از دیکشنری در Loss
+        loss = criterion(image, outputs)
+        
+        loss.backward()
+        optimizer.step()
         scheduler.step()
-
-
-
         ema.update()
+        
+        if epoch % 20 == 0:
+            print(f"Epoch {epoch}, Loss: {loss.item():.4f}")
 
-
-
-        history["loss"].append(
-            loss.item()
-        )
-
-
-
-        if "gamma" in outputs:
-
-            history["gamma"].append(
-                outputs["gamma"].mean().item()
-            )
-
-
-
-        if loss.item()<best_loss:
-
-
-            best_loss=loss.item()
-
-
-            best_state={
-                k:v.clone()
-                for k,v in model.state_dict().items()
-            }
-
-
-            counter=0
-
-
-        else:
-
-            counter+=1
-
-
-
-        if counter>=patience:
-
-            print(
-                f"Early stopping {i}"
-            )
-
-            break
-
-
-
-        if (i+1)%50==0:
-
-            print(
-                f"Iter {i+1}/300 Loss {loss.item():.5f}"
-            )
-
-
-
-    model.load_state_dict(
-        best_state
-    )
-
-
-    model.eval()
-
-
-    with torch.no_grad():
-
-
-        outputs=model(
-            v_tensor
-        )
-
-
-        enhanced=torch.clamp(
-            outputs["J_scat"],
-            0,
-            1
-        )
-
-
-
-    return {
-
-        "image":enhanced,
-
-        "history":history,
-
-        "best_loss":best_loss,
-
-        "model":model
-
-        }
+    # بازگرداندن مدل نهایی (با وزن‌های EMA)
+    ema.apply_shadow()
+    return model
+    
