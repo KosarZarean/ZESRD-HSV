@@ -1,31 +1,106 @@
 import torch
 import torch.nn as nn
-from .retinex import RetinexNetwork
-from .scattering import ScatteringNetwork
+import kornia
+
+from .retinex import RetinexNet
+from .scattering import ScatteringNet
+from physics import KoschmiederModel
+
 
 class ZESRD_HSV(nn.Module):
-    """Complete ZESRD on V channel"""
-    def __init__(self, base_channels=32, K=8):
+
+    def __init__(self):
+
         super().__init__()
-        self.retinex = RetinexNetwork(base_channels)
-        self.scattering = ScatteringNetwork(base_channels)
-        self.K = K
-        
-    def forward(self, v):
-        # Stage 1: Decomposition
-        R, L = self.retinex(v)
-        t, A = self.scattering(v)
-        
-        # Reconstruction
-        J_ret = R * L
-        J_scat = torch.clamp((v - A * (1 - t)) / (t + 1e-5), 0, 1)
-        
-        # Stage 2: Re-decomposition for Consistency
-        R1, L1 = self.retinex(J_scat.detach())
-        t1, A1 = self.scattering(L1)
-        
+
+        self.retinex = RetinexNet()
+
+        self.scattering = ScatteringNet()
+
+        self.physics = KoschmiederModel()
+
+    def adaptive_gamma(self, x):
+
+        gamma = 0.45 + 0.20 * (1 - torch.mean(x))
+
+        gamma = torch.clamp(gamma, 0.35, 0.70)
+
+        return torch.pow(x, gamma)
+
+    def forward(self, rgb):
+
+        hsv = kornia.color.rgb_to_hsv(rgb)
+
+        H = hsv[:, 0:1]
+
+        S = hsv[:, 1:2]
+
+        V = hsv[:, 2:3]
+
+        # ---------- Retinex ----------
+
+        R, G = self.retinex(V)
+
+        # ---------- Scattering ----------
+
+        A, t = self.scattering(G)
+
+        # ---------- Physics ----------
+
+        G_restore = self.physics.inverse(G, A, t)
+
+        # ---------- Gamma ----------
+
+        G_restore = self.adaptive_gamma(G_restore)
+
+        # ---------- Reconstruct ----------
+
+        V_new = torch.clamp(
+            G_restore * R,
+            0,
+            1
+        )
+
+        hsv_new = torch.cat(
+
+            [
+
+                H,
+
+                S,
+
+                V_new
+
+            ],
+
+            dim=1
+
+        )
+
+        rgb_new = kornia.color.hsv_to_rgb(hsv_new)
+
+        # ---------- Consistency ----------
+
+        R1, G1 = self.retinex(V_new)
+
         return {
-            'R': R, 'L': L, 't': t, 'A': A,
-            'J_ret': J_ret, 'J_scat': J_scat,
-            'R1': R1, 'L1': L1, 't1': t1, 'A1': A1
+
+            "enhanced": rgb_new,
+
+            "R": R,
+
+            "G": G,
+
+            "A": A,
+
+            "t": t,
+
+            "R1": R1,
+
+            "G1": G1,
+
+            "V": V,
+
+            "V_new": V_new
+
         }
