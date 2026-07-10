@@ -1,14 +1,15 @@
 import torch
 import torch.nn as nn
 
+# وارد کردن فایل‌ها بر اساس لیست دقیقی که فرستادید
+from .perceptual import VGGPerceptualLoss
+from .edge import EdgeLoss
 from .physics import physics_loss
-from .smoothness import smoothness_loss
+from .Smoothness import smoothness_loss 
 from .consistency import consistency_loss
-from .vgg_loss import VGGPerceptualLoss
-from .edge_loss import EdgeLoss
 
 class TotalLoss(nn.Module):
-    def __init__(self, config=None): # اضافه کردن config برای انعطاف‌پذیری
+    def __init__(self):
         super().__init__()
         self.vgg = VGGPerceptualLoss()
         self.edge = EdgeLoss()
@@ -17,7 +18,7 @@ class TotalLoss(nn.Module):
         # 1) Physics Reconstruction Loss
         Lrec = physics_loss(I, R, G)
 
-        # 2) Smoothness Loss (Illumination + Reflectance)
+        # 2) Smoothness Loss
         Ltv = smoothness_loss(G, R)
 
         # 3) Multi-stage Consistency Loss
@@ -29,7 +30,6 @@ class TotalLoss(nn.Module):
         # 5) Edge-aware Loss
         Ledge = self.edge(enhanced, I)
 
-        # محاسبه مجموع وزن‌دار
         total = (
             6.0 * Lrec +
             1.0 * Ltv +
@@ -37,5 +37,5 @@ class TotalLoss(nn.Module):
             0.2 * Lvgg +
             0.3 * Ledge
         )
-
         return total
+        
