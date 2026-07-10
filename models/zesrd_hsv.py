@@ -16,7 +16,7 @@ class ZESRD_HSV(nn.Module):
 
         self.scattering = ScatteringNet()
 
-        self.physics = KoschmiederModel()
+        self.koschmieder = KoschmiederModel()
 
     def adaptive_gamma(self, x):
 
