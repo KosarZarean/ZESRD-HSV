@@ -46,11 +46,11 @@ class ZESRD_HSV(nn.Module):
 
         # ---------- Physics ----------
 
-        G_restore = self.physics.inverse(G, A, t)
+        G_restore = self.koschmieder.inverse(G, A, t)
 
         # ---------- Gamma ----------
 
-        gamma = self.gamma_net(G_restore)
+        gamma = self.gamma(G_restore)
 
         G_restore = torch.pow(
             G_restore + 1e-6,
