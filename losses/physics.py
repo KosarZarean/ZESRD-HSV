@@ -1,37 +1,14 @@
 import torch
 
 
-class KoschmiederModel:
+def physics_loss(I,R,G):
 
-    @staticmethod
-    def forward(R,G,A,t):
+    reconstruction = R*G
 
-        A_global = torch.mean(
-            A,
-            dim=(2,3),
-            keepdim=True
+    loss = torch.mean(
+        torch.abs(
+            reconstruction-I
         )
+    )
 
-        I = (
-            G*t +
-            (1-t)*A_global
-        ) * R
-
-        return torch.clamp(I,0,1)
-
-
-    @staticmethod
-    def inverse(G,A,t):
-
-        A_global = torch.mean(
-            A,
-            dim=(2,3),
-            keepdim=True
-        )
-
-        G_restore = (
-            G -
-            (1-t)*A_global
-        )/(t+1e-6)
-
-        return torch.clamp(G_restore,0,1)
+    return loss
