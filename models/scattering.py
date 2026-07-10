@@ -1,40 +1,78 @@
 import torch
 import torch.nn as nn
-from .blocks import DepthwiseSeparableConv, ResidualDWBlock, SpatialAttention
 
-class ScatteringNetwork(nn.Module):
-    """Scattering Decomposition Network: V → t, A"""
-    def __init__(self, base_channels=32):
+from .blocks import (
+    DepthwiseSeparableConv,
+    ResidualDWBlock,
+    CBAM,
+    MultiScaleBlock
+)
+
+
+class ScatteringNet(nn.Module):
+
+    """
+    Estimate
+
+    Airlight A
+
+    Transmission t
+
+    from illumination map G
+    """
+
+    def __init__(self):
+
         super().__init__()
-        
-        self.conv1 = DepthwiseSeparableConv(1, base_channels)
-        self.conv2 = DepthwiseSeparableConv(base_channels, base_channels)
-        self.res1 = ResidualDWBlock(base_channels)
-        self.res2 = ResidualDWBlock(base_channels)
-        self.att = SpatialAttention()
-        
-        self.t_head = nn.Sequential(
-            DepthwiseSeparableConv(base_channels, base_channels),
-            nn.Conv2d(base_channels, 1, 3, padding=1),
-            nn.Sigmoid()
+
+        self.encoder = nn.Sequential(
+
+            MultiScaleBlock(1,32),
+
+            CBAM(32),
+
+            ResidualDWBlock(32),
+
+            DepthwiseSeparableConv(32,64),
+
+            ResidualDWBlock(64),
+
+            CBAM(64),
+
+            DepthwiseSeparableConv(64,64),
+
+            ResidualDWBlock(64)
+
         )
-        self.A_head = nn.Sequential(
-            nn.AdaptiveAvgPool2d(1),
-            nn.Conv2d(base_channels, 1, 1),
+
+        self.airlight_head = nn.Sequential(
+
+            DepthwiseSeparableConv(64,32),
+
+            nn.Conv2d(32,1,3,padding=1),
+
             nn.Sigmoid()
+
         )
-        
-    def forward(self, v):
-        x = self.conv1(v)
-        x = self.conv2(x)
-        x = self.res1(x)
-        x = self.res2(x)
-        x = self.att(x)
-        
-        t = self.t_head(x)
-        A = self.A_head(x)
-        
-        # Physical constraint
-        t = torch.clamp(t, 0.1, 0.9)
-        
-        return t, A
+
+        self.transmission_head = nn.Sequential(
+
+            DepthwiseSeparableConv(64,32),
+
+            nn.Conv2d(32,1,3,padding=1),
+
+            nn.Sigmoid()
+
+        )
+
+    def forward(self,G):
+
+        feat = self.encoder(G)
+
+        A = self.airlight_head(feat)
+
+        t = self.transmission_head(feat)
+
+        t = torch.clamp(t,0.15,0.95)
+
+        return A,t
