@@ -212,4 +212,4 @@ def train_zero_shot(v_tensor, config=None):
 
         "model":model
 
-    }
+        }
