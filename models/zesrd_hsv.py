@@ -5,6 +5,7 @@ import kornia
 from .retinex import RetinexNet
 from .scattering import ScatteringNet
 from .koschmieder import KoschmiederModel
+from .gamma import AdaptiveGammaNet
 
 class ZESRD_HSV(nn.Module):
 
